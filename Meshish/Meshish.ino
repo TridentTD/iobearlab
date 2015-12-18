@@ -30,13 +30,14 @@ const char* pwd = "";
 
 MeshishNode node;
 
+
 void setup() {
 
   Serial.begin(115200);
   node.debug(&Serial);
   
-  node.setup(pwd, false); //กรณี node ไม่ใช่ primary
-  //node.setup(pwd, true); //กรณี node เป็น primary
+  node.setup(pwd, false, 2); //กรณี node ไม่ใช่ primary
+  //node.setup(pwd, true, 1); //กรณี node เป็น primary
 
 //  Serial.println("------------------------------");
 //  Serial.println("WiFi Status List");
@@ -59,21 +60,22 @@ void loop() {
   // put your main code here, to run repeatedly:
   node.loop();
   
-  if(node.getStatus() == WL_CONNECTED) {
-    if(checker1==0){
-      Serial.print(WiFi.localIP());
-      Serial.print(" >>>> Connect to >>>> ");
-      Serial.println(WiFi.SSID());
-      
-      checker1=1;
-      checker0=0;
-    }
-  }else {
-    if(checker0==0){
-      //Serial.println("0");
-      checker1=0;
-      checker0=1;
-    }
-  }
+//  if(node.getStatus() == WL_CONNECTED) {
+//    if(checker1==0){
+//      Serial.println("");
+//      Serial.print(WiFi.localIP());
+//      Serial.print(" >>>> Connect to >>>> ");
+//      Serial.println(WiFi.SSID());
+//      
+//      checker1=1;
+//      checker0=0;
+//    }
+//  }else {
+//    if(checker0==0){
+//      //Serial.println("0");
+//      checker1=0;
+//      checker0=1;
+//    }
+//  }
 
 }

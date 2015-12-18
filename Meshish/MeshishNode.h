@@ -40,7 +40,9 @@ public:
     String ssid;
     long rssi;
     byte encrypt;
-    unsigned int nodeType;
+    unsigned int nodeType;       // Primary Node (1) or Secondary Node (0)
+//   unsigned int nodeAttribute;  // Attribute 1= Master_Node,  Attribute 2 = Repeater_Node ,  Attribute 3 = End_Node
+    
   };
 
   enum nodeType{
@@ -49,10 +51,17 @@ public:
     NODE_SECONDARY
   };
 
+  enum nodeAttribute{
+    NODE_ATTB_MASTER,
+    NODE_ATTB_REPEATER,
+    NODE_ATTB_ENDING
+  };
+
+
   MeshishNode();
   ~MeshishNode();
 
-  void setup(String password, bool primary=false);
+  void setup(String password, bool primary=false, int nodeAttribute=2) ;
   void loop();
   void makePrimary(bool primary=true);
   void debug(HardwareSerial* serial);
@@ -60,6 +69,10 @@ public:
   // bool isConnectedToPrimary();
   // bool enableDefaultRoutes(bool b=true);
   unsigned int getStatus();
+
+//  unsigned int getNodeAttribute();
+//  void setNodeAttribute(int nodeAtrib=2); // Attribute 1= Master_Node,  Attribute 2 = Repeater_Node ,  Attribute 3 = End_Node
+
 
 protected:
 
@@ -69,11 +82,27 @@ protected:
   unsigned int _getNodeType(const AccessPoint& ap);
   String _ipToString(const IPAddress& ip);
 
+  int  _getWIFIMODE();
+  void _setWIFIMODE(int wifimode);
+  
+
   byte _encrypt;
   bool _isPrimary;
   bool _debug;
-  bool _connectingToAP; // true when STA is connecting to AP
-  bool _creatingAP; // true when AP is being created
+  bool _showConnected=false;
+  bool _showCreatedAP=false;
+  bool _showDisconnected=false;
+
+  int  _nodeAttribute;  //  Attribute ไหน ( Master node : 1, Repeater node : 2, Ending node : 3 )
+  bool _connectedToAP; 
+
+  // node แบบ 1 (Master Node)  กำหนดเป็น Primary ต้นทาง WIFI_AP อย่างเดียว0
+  // node แบบ 2 (Repeater Node)หากยังไม่เชื่อมAP จะมี WiFi.mode เป็น WIFI_STA, หากเชื่อมAPแล้ว  WiFi.mode จะกลายเป็น WIFI_AP_STA เพื่อรอให้ node แบบ 3 ต่อเชื่อมต่อไป
+  // node แบบ 3 (Ending Node)  กำหนดเป็นปลายทางคือ WIFI_STA อย่างเดียว ไม่มีหน้าที่เป็น APต่อไป
+  
+  int  _currentWIFIMODE;
+  
+  bool _createdAP; // true when AP is being created
   unsigned int _numNetworks;
   uint32_t _chipId;
   String _ssid;
@@ -83,6 +112,11 @@ protected:
   ESP8266WebServer _server;
   AccessPoint _apList[MESHISH_MAX_AP_SCAN];
   HardwareSerial* _serial;
+
+  int _connecting_loop = 5 * 1000 / 50;
+  int WIFI_LED_PIN = D4;
+  //int WIFI_LED_PIN =BUILTIN_LED;
+
 };
 
 #endif /* __MESHISH_H__ */

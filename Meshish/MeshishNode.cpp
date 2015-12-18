@@ -31,8 +31,8 @@ MeshishNode::MeshishNode():
   _chipId(0),
   _serial(NULL),
   _debug(false),
-  _connectingToAP(false),
-  _creatingAP(false),
+  _connectedToAP(false),
+  _createdAP(false),
   _password(""),
   _server(ESP8266WebServer(80))
 {
@@ -44,152 +44,167 @@ MeshishNode::~MeshishNode()
 
 }
 
-void MeshishNode::setup(String password, bool primary)
-{
+// primary --> AP , secondary --> STA AP
+// Attribute 1= Master_Node,  Attribute 2 = Repeater_Node ,  Attribute 3 = Ending_Node
 
-  WiFi.mode(WIFI_AP_STA);
+void MeshishNode::setup(String password, bool primary, int nodeAttribute) 
+{
+  _debug = true;
+  _isPrimary = primary;
+  _password = password;
+  _chipId = ESP.getChipId();
+  _nodeAttribute = nodeAttribute;
+
+  pinMode(WIFI_LED_PIN,OUTPUT);
+  digitalWrite(WIFI_LED_PIN,HIGH); //ให้ไฟดับเสียก่อน
+  
+  if(_isPrimary) { _nodeAttribute = 1; }
+
+  switch( _nodeAttribute ) {
+  case 1 :
+    _setWIFIMODE(WIFI_AP);
+    break;
+  case 2 :
+    _setWIFIMODE(WIFI_STA);  //เริ่มต้น เป็น WIFI_STA หลังต่อกับ AP แล้ว จะเปลี่ยนค่าเป็น WIFI_AP_STA
+    break;
+  case 3 :
+    _setWIFIMODE(WIFI_STA);
+    break;
+  }
   
   WiFi.disconnect();
   delay(100);
 
-  _isPrimary = primary;
-  _password = password;
-  _chipId = ESP.getChipId();
-
   bool ssidGenerated = _generateSSID();
 
-  if (!ssidGenerated && _debug)
-  {
-    _serial->println("MeshishNode::setup: _generateSSID() returned false.");
-  }
+  if (!ssidGenerated && _debug){  _serial->println("MeshishNode::setup: _generateSSID() returned false."); }
 
-  if (_isPrimary && ssidGenerated)
-  {
-    if (_debug)
-    {
-      _serial->println("MeshishNode::setup: Primary node creating SSID \"" + _ssid + "\"");
+  if( _nodeAttribute == 1 ) {
+    if (_isPrimary && ssidGenerated) {  // กรณี node เป็นแบบ master_node
+      if (_debug) {  _serial->println("MeshishNode::setup: Primary node creating SSID \"" + _ssid + "\""); }
+      
+      WiFi.softAP(_ssid.c_str());
+      _createdAP = true;
+      
     }
-    WiFi.softAP(_ssid.c_str());
-    _creatingAP = true;
-  }
-  else
-  {
+  } else {  // กรณี node เป็นแบบ repeater_node หรือ ending_node
     _scanAndConnect();
   }
 
-  _server.on("/", [this](){
-     _server.send(200, "text/plain", "welcome!");
-  });
-  
-  _server.onNotFound([this](){
-    _server.send(200, "text/plain", "404 file not found");
-  });
-
+  _server.on("/", [this]()   { _server.send(200, "text/plain", "welcome!");  });
+  _server.onNotFound([this](){ _server.send(200, "text/plain", "404 file not found");  });
   _server.begin();
 }
 
-void MeshishNode::loop()
-{
- 
-  if (getStatus() == WL_CONNECTION_LOST)
-  {
-    _serial->println("MeshishNode::loop: connection lost");
-  }
-  else if(getStatus() == WL_DISCONNECTED)
-  {
-    _serial->println("MeshishNode::loop: disconnected");
-  }
+void MeshishNode::loop() {
   
-  if (_connectingToAP) 
-  {
-    unsigned int status = getStatus();
-    if (_debug)
-    {
-      _serial->print("MeshishNode::loop: status ");
-      _serial->println(status);  
-    }
-    
-    // connection established
-    if (status == WL_CONNECTED)
-    {
-      _connectingToAP = false;
-
-      if (_debug)
-      {
-        _serial->print("MeshishNode::loop: connection to \"");
-        _serial->print(WiFi.SSID());
-        _serial->println("\" established.");
-        _serial->print("MeshishNode::loop: recieved IP Address ");
-        _serial->println(WiFi.localIP());
+  if(_nodeAttribute==2 || _nodeAttribute==3) { // 
+    while( getStatus() != WL_CONNECTED ) {
+      if(_debug) {
+        if(!_showDisconnected) {
+          if (getStatus()     == WL_CONNECTION_LOST)  { _showConnected=false; _showDisconnected = true; _serial->println(); _serial->println("MeshishNode::loop: connection lost"); }
+          else if(getStatus() == WL_DISCONNECTED)     { _showConnected=false; _showDisconnected = true; _serial->println(); _serial->println("MeshishNode::loop: wait for connecting...");    }
+        }else{
+          if (getStatus()     == WL_CONNECTION_LOST)  { _showConnected=false; _showDisconnected = true; _serial->print("*"); }
+          else if(getStatus() == WL_DISCONNECTED)     { _showConnected=false; _showDisconnected = true; _serial->print(".");}
+        }
       }
-
-      // now create a secondary AP
-      bool ssidGenerated = _generateSSID();
-      if (ssidGenerated)
-      {
-        // WiFi.softAPConfig(IPAddress(192, 168, 4, 10),
-        //                   IPAddress(192, 168, 4, 10),
-        //                   IPAddress(255, 255, 255, 0)); 
-        WiFi.softAP(_ssid.c_str());
-        _creatingAP = true;
-      }
-
-    } // connection failed
-    else if (status == WL_CONNECT_FAILED)
-    {
-      _connectingToAP = false;
-
-      if (_debug)
-      {
-        _serial->print("MeshishNode::loop: connection to ");
-        _serial->print(WiFi.SSID());
-        _serial->println(" failed.");
-      }
-    } // still connecting...
-    else if (status == WL_IDLE_STATUS)
-    {
-      if (_debug)
-      {
-        _serial->println("MeshishNode::loop: connection idle...");
+      digitalWrite(WIFI_LED_PIN,HIGH); delay(50); digitalWrite(WIFI_LED_PIN,LOW); delay(50); 
+      _connecting_loop--;
+      if( _connecting_loop < 0) {
+        digitalWrite(WIFI_LED_PIN,HIGH); 
+        _connecting_loop = 5 * 1000 / 50;
+        _scanAndConnect();
       }
     }
-  }
-  else
-  {
-    // not _connectingToAP
+  
+    if(!_showConnected) {
+      if(getStatus()  == WL_CONNECTED)  { 
+        _connectedToAP = true;  _showConnected = true; _showDisconnected = false; 
+        if(_debug) {
+          _serial->println(); 
+          _serial->print("MeshishNode::loop: connection to \""); _serial->print(WiFi.SSID()); _serial->println("\" established.");
+          _serial->print("MeshishNode::loop: recieved IP Address "); _serial->println(WiFi.localIP());
+        }
+
+        if( _nodeAttribute == 2) { _setWIFIMODE(WIFI_AP_STA); }
+      }
+    }
+
+//    while( getStatus() == WL_CONNECTED ) {
+//      
+//    }
+//
+//    _connectedToAP = false;  _showConnected = true; _showDisconnected = false; 
   }
 
-  if (_creatingAP)
-  {
-    unsigned int status = getStatus();
-    // connection established
-    if (status == WL_CONNECTED)
-    {
-      _creatingAP = false;
-      if (_debug)
-      {
-        _serial->println("MeshishNode::loop: Access point created.");
-        WiFi.printDiag(*_serial);
-      }
-    }
-    else if (status == WL_CONNECT_FAILED)
-    {
-      _creatingAP = false;
-      if (_debug)
-      {
-      _serial->println("MeshishNode::loop: Failed to create access point.");
-      }
-    }
-    else if (status == WL_IDLE_STATUS)
-    {
-      if (_debug)
-      {
-        _serial->println("MeshishNode::loop: access point creation idle...");
-      }
-    }
-  }
 
-  _server.handleClient();
+//    
+//    // connection established
+//    if (status == WL_CONNECTED) {
+//      _connectedToAP = false;
+//      
+//      if (_debug && (_showConnected == false) ) {
+//        _serial->println();
+//        _serial->print("MeshishNode::loop: connection to \""); _serial->print(WiFi.SSID()); _serial->println("\" established.");
+//        _serial->print("MeshishNode::loop: recieved IP Address "); _serial->println(WiFi.localIP());
+//
+//        _showConnected = true; _showDisconnected=false;
+//      }
+//
+//      
+//      if(_nodeAttribute==2 && _connectedToAP && !_createdAP) {
+//        if(_createdAP==false) {
+//          // now create a secondary AP
+//          bool ssidGenerated = _generateSSID();
+//    
+//          if (ssidGenerated) {
+//            // WiFi.softAPConfig(IPAddress(192, 168, 4, 10),
+//            //                   IPAddress(192, 168, 4, 10),
+//            //                   IPAddress(255, 255, 255, 0)); 
+//            WiFi.softAP(_ssid.c_str());
+//            _createdAP = true;
+//          }
+//        }
+//      }
+//    } else {  // เคย connected เข้า AP แล้วหลุดไป 
+//      
+//      _connectedToAP = false; _createdAP = false; _showConnected = false;_showCreatedAP = false;
+//      
+//      //if(_nodeAttribute==2 ) { _setWIFIMODE(WIFI_STA);  }
+//      
+//
+//
+//
+////      if (status == WL_CONNECT_FAILED) {  
+////        if (_debug) { _serial->print("MeshishNode::loop: connection to "); _serial->print(WiFi.SSID()); _serial->println(" failed."); }
+////        
+////      } // a temporary status before WiFi.begin()
+////      else if (status == WL_IDLE_STATUS){
+////        if (_debug) { _serial->println("MeshishNode::loop: connection idle..."); }
+////        _showConnected = false;
+////      }
+//    }
+//  } else {
+//    // not _connectedToAP
+////    if( _nodeAttribute != 1 ) {
+////      _scanAndConnect();
+////    }
+//  }
+//  
+//  ////////////////////////////////////////////////////////////
+//  if (_createdAP){
+//
+//    if (_debug && !_showCreatedAP ) {
+//      _serial->println("MeshishNode::loop: Access point created.");
+//      WiFi.printDiag(*_serial);
+//      _showCreatedAP = true;
+//    }
+//  } else {
+//    _showCreatedAP = false;
+//  }
+//
+//  _server.handleClient();
 }
 
 void MeshishNode::debug(HardwareSerial* serial)
@@ -208,7 +223,7 @@ void MeshishNode::makePrimary(bool primary)
     if (_generateSSID() && _isPrimary)
     {
       WiFi.softAP(_ssid.c_str());
-      _creatingAP = true;
+      _createdAP = true;
     }
     else if (_debug)
     {
@@ -233,8 +248,6 @@ bool MeshishNode::isPrimary()
 
 // }
 
-
-
 unsigned int MeshishNode::getStatus()
 {
   return WiFi.status();
@@ -243,18 +256,20 @@ unsigned int MeshishNode::getStatus()
 
 void MeshishNode::_scanAndConnect()
 {
-  if (_debug)
-  {
+  digitalWrite(WIFI_LED_PIN,HIGH); //กำหนดไฟบนบอร์ด ESP  ให้ดับ 
+  if( _nodeAttribute==2) { _createdAP=false; _showCreatedAP = false; }
+  
+  if (_debug){
+    _serial->println("");
+    _serial->println("---------------------------------------------------------------");
     _serial->println("scan start...");
   }
 
   //_numNetworks = min(WiFi.scanNetworks(), MESHISH_MAX_AP_SCAN);
-  _numNetworks = (WiFi.scanNetworks() < MESHISH_MAX_AP_SCAN)? WiFi.scanNetworks(): MESHISH_MAX_AP_SCAN;
+  _numNetworks = (WiFi.scanNetworks(false,true) < MESHISH_MAX_AP_SCAN)? WiFi.scanNetworks(false,true): MESHISH_MAX_AP_SCAN;
 
-  if (_debug)
-  {
-    _serial->print(_numNetworks);
-    _serial->println(" networks found in scan");
+  if (_debug) {
+    _serial->print(_numNetworks); _serial->println(" networks found in scan"); _serial->println("");
   }
 
   // the index of the node with the highest rssi
@@ -263,10 +278,10 @@ void MeshishNode::_scanAndConnect()
   for (int i = 0; i < _numNetworks; i++)
   {
     _apList[i] = AccessPoint();
-    _apList[i].ssid     = WiFi.SSID(i);             // ชื่อของ Access Point 
-    _apList[i].rssi     = WiFi.RSSI(i);             // ความแรงของสัญญาณของ AP (หน่วยคือ dBm)
-    _apList[i].encrypt  = WiFi.encryptionType(i);   // 
-    _apList[i].nodeType = _getNodeType(_apList[i]); // เป็น Primary หรือ Secondary Node?
+    _apList[i].ssid     = WiFi.SSID(i);
+    _apList[i].rssi     = WiFi.RSSI(i);
+    _apList[i].encrypt  = WiFi.encryptionType(i);
+    _apList[i].nodeType = _getNodeType(_apList[i]);
 
     if (_apList[i].nodeType == NODE_PRIMARY)
     {
@@ -278,13 +293,14 @@ void MeshishNode::_scanAndConnect()
       {
         if (_apList[i].rssi > _apList[maxDBmPrimary].rssi)
         {
-          maxDBmPrimary = i;                       // index ของ AP จากที่เจอทั้งหมด ที่ มีสัญญาณแรงสุดๆ
+          maxDBmPrimary = i;
         }
       }
     }
 
     if (_debug)
     {
+      _serial->print(i+1); _serial->print(") ");
       _serial->print(_apList[i].ssid);
       _serial->print("\t");
       _serial->print(_apList[i].rssi);
@@ -298,8 +314,8 @@ void MeshishNode::_scanAndConnect()
 
   if (maxDBmPrimary != -1)
   {
-    if (_debug)
-    {
+    if (_debug) {
+      _serial->println("");
       _serial->print("MeshishNode::_scanAndConnect: connecting to ");
       _serial->println(_apList[maxDBmPrimary].ssid.c_str());
     } 
@@ -307,7 +323,10 @@ void MeshishNode::_scanAndConnect()
     if (_password.equals("")) WiFi.begin(_apList[maxDBmPrimary].ssid.c_str());
     else WiFi.begin(_apList[maxDBmPrimary].ssid.c_str(), _password.c_str());
 
-    _connectingToAP = true;
+    _connectedToAP= false; // WiFi เริ่มแล้ว แต่ยังไม่ได้ ต่อเข้าไปต้องอยู่ใน loop() เพื่อวนเช็คว่าติดหรือยังอีกที
+    _showConnected = false;
+    if(_nodeAttribute ==2 && _connectedToAP ) { _setWIFIMODE(WIFI_AP_STA); }
+
   }
 }
 
@@ -325,7 +344,6 @@ bool MeshishNode::_generateSSID()
   }
   else
   {
-
     if (WiFi.status() == WL_CONNECTED)
     {
       IPAddress ip = WiFi.localIP();
@@ -377,5 +395,15 @@ String MeshishNode::_ipToString(const IPAddress& ip)
          String(ip[2]) + "." + 
          String(ip[3]);
 }
+
+int  MeshishNode::_getWIFIMODE(){
+  return _currentWIFIMODE;
+}
+
+void MeshishNode::_setWIFIMODE(int wifimode){
+  _currentWIFIMODE = wifimode;
+  WiFi.mode(WiFiMode(wifimode));
+}
+
 
 
