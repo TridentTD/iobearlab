@@ -32,6 +32,12 @@
 #include "ESP8266WiFi.h"
 #include "ESP8266WebServer.h"
 
+#define NODE_NONE   0
+#define NODE_PRIMARY   1
+#define NODE_SECONDARY 2
+
+
+  
 class MeshishNode {
 
 public:
@@ -40,39 +46,28 @@ public:
     String ssid;
     long rssi;
     byte encrypt;
-    unsigned int nodeType;       // Primary Node (1) or Secondary Node (0)
-//   unsigned int nodeAttribute;  // Attribute 1= Master_Node,  Attribute 2 = Repeater_Node ,  Attribute 3 = End_Node
-    
-  };
-
-  enum nodeType{
-    NODE_NONE,
-    NODE_PRIMARY,
-    NODE_SECONDARY
-  };
-
-  enum nodeAttribute{
-    NODE_ATTB_MASTER,
-    NODE_ATTB_REPEATER,
-    NODE_ATTB_ENDING
+    unsigned int nodeType;  // nodeType 1 = Primary, nodeType2= Secondary
   };
 
 
   MeshishNode();
   ~MeshishNode();
 
-  void setup(String password, bool primary=false, int nodeAttribute=2) ;
+  //void setup(String password, int nodeType=NODE_SECONDARY) ;
+  void setup(String password, int nodeType=NODE_SECONDARY,int port=-1 ) ;
   void loop();
-  void makePrimary(bool primary=true);
+  
   void debug(HardwareSerial* serial);
-  bool isPrimary();
+  
+  bool isPrimaryNode();
+  bool isSecondaryNode();
+
+  
+
   // bool isConnectedToPrimary();
   // bool enableDefaultRoutes(bool b=true);
   unsigned int getStatus();
-
-//  unsigned int getNodeAttribute();
-//  void setNodeAttribute(int nodeAtrib=2); // Attribute 1= Master_Node,  Attribute 2 = Repeater_Node ,  Attribute 3 = End_Node
-
+  uint32_t getChipID();
 
 protected:
 
@@ -84,16 +79,18 @@ protected:
 
   int  _getWIFIMODE();
   void _setWIFIMODE(int wifimode);
-  
+
 
   byte _encrypt;
-  bool _isPrimary;
+  bool _isPrimaryNode=false;
+  bool _isSecondaryNode=false;
+  bool _isEndingNode=false;
   bool _debug;
-  bool _showConnected=false;
-  bool _showCreatedAP=false;
+  bool _debug_showConnected=false;
+  bool _debug_showCreatedAP=false;
   bool _showDisconnected=false;
 
-  int  _nodeAttribute;  //  Attribute ไหน ( Master node : 1, Repeater node : 2, Ending node : 3 )
+  int  _nodeType;  //  Type ไหน ( Master node : 1, Repeater node : 2, Ending node : 3 )
   bool _connectedToAP; 
 
   // node แบบ 1 (Master Node)  กำหนดเป็น Primary ต้นทาง WIFI_AP อย่างเดียว0
@@ -104,12 +101,14 @@ protected:
   
   bool _createdAP; // true when AP is being created
   unsigned int _numNetworks;
-  uint32_t _chipId;
+  uint32_t _chipID;
   String _ssid;
   String _ssidPrefix;
   String _password;
-  
+  int _port;
   ESP8266WebServer _server;
+
+
   AccessPoint _apList[MESHISH_MAX_AP_SCAN];
   HardwareSerial* _serial;
 

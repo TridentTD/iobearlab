@@ -27,7 +27,7 @@
 
 // Password ของทั้งระบบ node ทุกตัวตั้งค่าเดียวกันที่นี่
 const char* pwd = "";
-
+ 
 MeshishNode node;
 
 
@@ -35,47 +35,16 @@ void setup() {
 
   Serial.begin(115200);
   node.debug(&Serial);
-  
-  node.setup(pwd, false, 2); //กรณี node ไม่ใช่ primary
-  //node.setup(pwd, true, 1); //กรณี node เป็น primary
 
-//  Serial.println("------------------------------");
-//  Serial.println("WiFi Status List");
-//  Serial.print("WL_CONNECTED : ");   Serial.println(WL_CONNECTED);
-//  Serial.print("WL_NO_SHIELD : ");   Serial.println(WL_NO_SHIELD); 
-//  Serial.print("WL_IDLE_STATUS : ");   Serial.println(WL_IDLE_STATUS); 
-//  Serial.print("WL_NO_SSID_AVAIL : ");   Serial.println(WL_NO_SSID_AVAIL); 
-//  Serial.print("WL_SCAN_COMPLETED : ");   Serial.println(WL_SCAN_COMPLETED); 
-//  Serial.print("WL_CONNECT_FAILED : ");   Serial.println(WL_CONNECT_FAILED); 
-//  Serial.print("WL_CONNECTION_LOST : ");   Serial.println(WL_CONNECTION_LOST); 
-//  Serial.print("WL_DISCONNECTED : ");   Serial.println(WL_DISCONNECTED); 
-//  Serial.println("------------------------------");
-//    
-//  Serial.print("isPrimary? "); Serial.println(node.isPrimary());
+  //node.setup(pwd, NODE_PRIMARY); //กรณี node เป็น Primary ... Port ปกติ คือ 3000
+  //node.setup(pwd, NODE_PRIMARY, 3002); //กรณี node เป็น Primary .... กำหนด Port เอง
+  node.setup(pwd, NODE_SECONDARY); //กรณี node เป็น Secondary
+
 }
-int checker1=0;
-int checker0=1;
+
 
 void loop() {
   // put your main code here, to run repeatedly:
   node.loop();
   
-//  if(node.getStatus() == WL_CONNECTED) {
-//    if(checker1==0){
-//      Serial.println("");
-//      Serial.print(WiFi.localIP());
-//      Serial.print(" >>>> Connect to >>>> ");
-//      Serial.println(WiFi.SSID());
-//      
-//      checker1=1;
-//      checker0=0;
-//    }
-//  }else {
-//    if(checker0==0){
-//      //Serial.println("0");
-//      checker1=0;
-//      checker0=1;
-//    }
-//  }
-
 }
