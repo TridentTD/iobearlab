@@ -17,18 +17,20 @@
 
 bool   _debug=true;
 
-int  NODE_TYPE = NODE_PRIMARY;
+//int  NODE_TYPE = NODE_PRIMARY;
+int  NODE_TYPE = NODE_SECONDARY;
 
 String password="";
 
-String rest_id = "01";
-String rest_name= "PumpCenter";
+//String rest_id = "01";
+//String rest_name= "PumpCenter";
 
-//String rest_id = "03";
-//String rest_name= "kuti03";
+String rest_id = "03";
+String rest_name= "kuti03";
 
 int temperature;
 int humidity;
+String externalAP, internalAP;
 //////////////////////////////////////////////////
 
 aREST rest = aREST();
@@ -39,7 +41,7 @@ String _password;
 WiFiServer _webserver(80);
 //int    _port=-1;
 
-String externalAP, internalAP;
+
 uint32_t _chipID;
 bool     _primary=false;
 int      _nodeType =NODE_TYPE;
@@ -127,10 +129,13 @@ void _scanAndConnect() {
     _apList[i].encrypt  = WiFi.encryptionType(i);
     _apList[i].nodeType = _getNodeType(_apList[i]);  // 0 คือ AP นอกระบบ Mesh, 1 คือ AP ที่เป็น Primary, 2 คือ AP ที่เป็น Secondary
 
-    if (_apList[i].nodeType == NODE_PRIMARY) {
+//    if (_apList[i].nodeType == NODE_PRIMARY) {
       if ( _maxDBmPrimary == -1) { _maxDBmPrimary = i; }
       else{ if (_apList[i].rssi > _apList[_maxDBmPrimary].rssi) { _maxDBmPrimary = i;} }
-    }
+//    } else if (_apList[i].nodeType == NODE_SECONDARY) {
+//      if ( _maxDBmPrimary == -1) { _maxDBmPrimary = i; }
+//      else{ if (_apList[i].rssi > _apList[_maxDBmPrimary].rssi) { _maxDBmPrimary = i;} }
+//    }
 
     if (_debug) {
       Serial.print(i+1); Serial.print(") "); Serial.print(_apList[i].ssid); Serial.print(" (");
@@ -276,22 +281,22 @@ void node_loop(){
         }
 
         // หลัง connect เข้าสู่ externalAP ได้แล้ว ต่อไปสร้าง internalAP ในวงตัวเอง
-        if( _nodeType == NODE_SECONDARY) { 
-          WiFi.mode(WIFI_AP_STA);
-          if(_generateSSID()){
-            WiFi.softAP( _ssid.c_str(), _password.c_str() );
-            internalAP =_ssid;
-            
-            if (_debug) {
-              Serial.println();
-              Serial.println("created new AP \"" + _ssid + "\"");
-              Serial.print("node_loop: AP IP      :");      Serial.println(WiFi.softAPIP());
-              Serial.print("node_loop: gateway IP :"); Serial.println(WiFi.gatewayIP());
-              Serial.print("node_loop: local IP   :");      Serial.println(WiFi.localIP()); 
-              //if(_port>0){ Serial.print("PORT : "); Serial.println(_port); }
-            }
-          }
-        }
+//        if( _nodeType == NODE_SECONDARY) { 
+//          WiFi.mode(WIFI_AP_STA);
+//          if(_generateSSID()){
+//            WiFi.softAP( _ssid.c_str(), _password.c_str() );
+//            internalAP =_ssid;
+//            
+//            if (_debug) {
+//              Serial.println();
+//              Serial.println("created new AP \"" + _ssid + "\"");
+//              Serial.print("node_loop: AP IP      :");      Serial.println(WiFi.softAPIP());
+//              Serial.print("node_loop: gateway IP :"); Serial.println(WiFi.gatewayIP());
+//              Serial.print("node_loop: local IP   :");      Serial.println(WiFi.localIP()); 
+//              //if(_port>0){ Serial.print("PORT : "); Serial.println(_port); }
+//            }
+//          }
+//        }
       }
     }
   }
