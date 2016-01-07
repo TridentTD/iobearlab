@@ -2,6 +2,10 @@
 #include "ESP8266WebServer.h"
 #include "MeshishNode.h"
 
+#ifndef IP_FORWARD
+#define IP_FORWARD    1
+#endif
+
 
 // Password ของทั้งระบบ node ทุกตัวตั้งค่าเดียวกันที่นี่
 const char* pwd = "";
@@ -19,7 +23,7 @@ void setup() {
   Serial.begin(115200);
   node.debug(&Serial);
 
-  node.setup(pwd, false);
+  node.setup(pwd, true);
 }
 
 void loop() {
