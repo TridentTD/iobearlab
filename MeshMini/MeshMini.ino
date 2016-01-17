@@ -1,6 +1,8 @@
 #include "ESP8266WiFi.h"
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
+#include <ESP8266HTTPClient.h>
+
 #include <aREST.h>
 //#include <aREST_UI.h>
 #include "FS.h"
@@ -14,13 +16,13 @@ enum nodeType{
 //---------Init Zone --------------------------
 //unsigned int node_type = NODE_PRIMARY;
 //String node_name = "NodeMain";
-unsigned int node_type = NODE_SECONDARY;
-String node_name = "NodeSecond";
-String pwd       = "";
+//unsigned int node_type = NODE_SECONDARY;
+//String node_name = "NodeSecond";
+//String pwd       = "";
 
-//String       node_name;
-//unsigned int node_type;
-//String       pwd;
+String       node_name;
+unsigned int node_type;
+String       pwd;
 
 
 // Variables to be exposed to the API
@@ -47,7 +49,8 @@ int          _wifi_led = D4;
 String       _ssid;
 unsigned int _wifi_mode = (node_type==NODE_PRIMARY)? WIFI_AP : WIFI_STA;
 
-unsigned int _secondary_status = 0;  // 0=ยังไม่พบ network  1=ระหว่างการ connecting 2=connectedแล้วแต่ยังไม่ได้สร้าง AP  3= สร้างเรียบร้อย
+unsigned int _primary_status = 2;  //                                            2=ยังไม่สร้าง AP เตรียมสร้าง        3= สร้างเรียบร้อย ทำการดึง/โยนข้อมูล
+unsigned int _secondary_status = 0;  // 0=ยังไม่พบ network  1=ระหว่างการ connecting 2=connectedแล้วแต่ยังไม่ได้สร้าง AP  3= สร้างเรียบร้อย ทำการดึง/โยนข้อมูล
          int _wifi_connecting_loop= 5000/100;
 
 #define MESHMINI_MAX_AP_SCAN 100
@@ -57,7 +60,7 @@ int         _node_nat_size=0;
 
 aREST       node_rest = aREST();
 //aREST_UI      node_rest = aREST_UI();
-WiFiServer  server(8080);
+WiFiServer  server(8080);  //<aREST HTTP Webserver
 ESP8266WebServer esp8266server(80);
 
 //----------------------------------------------
@@ -96,6 +99,8 @@ String _ipToString(const IPAddress& ip) {
 }
 
 void _scan_AP(){
+  digitalWrite(_wifi_led,LOW); delay(50); digitalWrite(_wifi_led,HIGH); delay(50);
+
   WiFi.mode(WIFI_STA); _ssid = "";
   digitalWrite(_wifi_led,HIGH);
   
@@ -106,6 +111,8 @@ void _scan_AP(){
   Serial.println("scan start... ");
 
   int _numNetworks = WiFi.scanNetworks();
+
+  digitalWrite(_wifi_led,LOW); delay(50); digitalWrite(_wifi_led,HIGH); delay(50);
 
   Serial.println( String(_numNetworks)+ " networks found");
   Serial.println();
@@ -126,7 +133,8 @@ void _scan_AP(){
         }
       }
     }
-    
+   digitalWrite(_wifi_led,LOW); delay(50); digitalWrite(_wifi_led,HIGH); delay(50);
+   
     Serial.print( String(i+1)+". "+String(_apList[i].ssid)+" ("+String(_apList[i].rssi)+" dBm)");
     Serial.print("   Encryption: "+ String(_apList[i].encrypt ));
     Serial.println("   nodeType: "+ String(_apList[i].nodeType));
@@ -138,6 +146,7 @@ void _scan_AP(){
   } else {
     return;
   }
+  digitalWrite(_wifi_led,LOW); delay(50); digitalWrite(_wifi_led,HIGH); delay(50);
 
   if ( pwd.equals("")) WiFi.begin(_apList[_maxDBmPrimary].ssid.c_str());
   else WiFi.begin(_apList[_maxDBmPrimary].ssid.c_str(), pwd.c_str());
@@ -294,70 +303,53 @@ int NAT_Handler(String command){
 }
 
 void printDirectory(){
-  String host = "192.168.4.1";
+  String host;
   if(esp8266server.hasArg("dir")){ Serial.println("DIR : "+esp8266server.arg("dir")); }
   if(esp8266server.hasArg("ip")){ host=esp8266server.arg("ip"); }
 
-  Serial.println("IP Forward : "+host);
-  WiFiClient client2;
-  if (!client2.connect( host.c_str(), 8080)) {
-    Serial.println("connection failed");
-    return;
-  }
-  client2.print(String("GET / HTTP/1.1\r\n") +
-               "Host: " + host + "\r\n" + 
-               "Connection: close\r\n\r\n");
-  delay(10);
   
-  String msg="";
-  // Read all the lines of the reply from server and print them to Serial
-  while(client2.available()){
-    String line = client2.readStringUntil('\r');
-    Serial.print(line);
-    msg +=line;
-  }
 
-  esp8266server.send(200, "text/html", msg);
 }
 
 //==============================================
 void node_setup(){
-//  bool result = SPIFFS.begin();
-//  File nodefile = SPIFFS.open("/nodemcu.txt", "r");
-//  if (nodefile){
-//    String line;
-//    while(nodefile.available()) {
-//      line = nodefile.readStringUntil('\n');
-//    }
-//    int first_semicolon  = line.indexOf(';');
-//    int second_semicolon = line.indexOf(';',first_semicolon+1);
-//  
-//    node_name      = line.substring(0,first_semicolon);
-//    node_type      = (line.substring(first_semicolon+1,second_semicolon)=="NODE_PRIMARY")? NODE_PRIMARY : NODE_SECONDARY;
-//    pwd            = String(line.substring(second_semicolon+1).toInt()+0);
-//  }
+  bool result = SPIFFS.begin();
+  File nodefile = SPIFFS.open("/nodemcu.txt", "r");
+  if (nodefile){
+    String line;
+    while(nodefile.available()) {
+      line = nodefile.readStringUntil('\n');
+    }
+    int first_semicolon  = line.indexOf(';');
+    int second_semicolon = line.indexOf(';',first_semicolon+1);
+  
+    node_name      = line.substring(0,first_semicolon);
+    node_type      = (line.substring(first_semicolon+1,second_semicolon)=="NODE_PRIMARY")? NODE_PRIMARY : NODE_SECONDARY;
+    pwd            = line.substring(second_semicolon+1);
+  }
 
   
   pinMode(_wifi_led,OUTPUT); digitalWrite(_wifi_led, HIGH);
 
   Serial.begin(115200);Serial.println();Serial.println();
   Serial.println(node_name+":"+node_type);
-//  WiFi.softAPdisconnect();
 //  WiFi.disconnect();
 
   switch(node_type){
     case NODE_PRIMARY:
       if( _gen_ssid() ) {
-        WiFi.mode(WIFI_AP);
         delay(10000);
-        WiFi.softAP( _ssid.c_str(), pwd.c_str() );
+        
+        WiFi.mode(WIFI_AP);
+        String wifiname= _ssid.c_str();
+        
+        Serial.println("ssid :"+_ssid);
+        WiFi.softAP( _ssid.c_str(),  "" );  //pwd.c_str()
         digitalWrite(_wifi_led,LOW);
 
         Serial.println( "Primary Node AP : \"" + _ssid + "\" started | AP IP " + _ipToString(WiFi.softAPIP()));
-        //Serial.println( "IP_FORWARD : " + String(IP_FORWARD));
 
-        node_rest.set_id("1");
-        node_rest.set_name(node_name);
+        node_rest.set_id("1");   node_rest.set_name(node_name);
         Serial.println("node rest id : 1   name :"+ node_name);
 
         NAT_list();
@@ -365,7 +357,10 @@ void node_setup(){
         node_rest.function("NAT",NAT_Handler);
         node_rest.function("NODE",NODE_Handler);
 
+        _primary_status=3;
+
       }else { Serial.println(" _gen_ssid() : false "); }
+
       break;
     case NODE_SECONDARY:
       WiFi.mode( WiFiMode(_wifi_mode));
@@ -389,6 +384,10 @@ void node_setup(){
 void node_loop(){
   switch(node_type){
     case NODE_PRIMARY:
+      switch(_primary_status){
+        case 3: // layer3 จัดการข้อมูล
+        break;
+      }
       break;
     case NODE_SECONDARY:
       int status = WiFi.status();
@@ -451,36 +450,47 @@ void node_loop(){
           break;
         case 3: // เสร็จสิ้น WiFiเชื่อมต่อและ NATแล้วทุกขั้นตอน จะทำอะไรก็ส่วนนี้
           Serial.println("Layer3 : GET to 192.168.4.1");
-          
-          // Use WiFiClient class to create TCP connections
-          WiFiClient client;
-          const char* host = "192.168.4.1";
-          const int httpPort = 8080;
-          if (!client.connect(host, httpPort)) {
-            Serial.println("connection failed");
-            return;
+          HTTPClient http;
+
+          WiFi.mode(WIFI_STA);  //<--- ห้ามหาย
+          http.begin("192.168.4.1",8080, "/");
+          int http_status = http.GET();
+          if( http_status ) {
+            if( http_status==200){
+              String data = http.getString();
+              Serial.println(data);
+            }
+          } else {
+            Serial.println("connection Fail");
           }
-          
-          // We now create a URI for the request
-          String url = "/temperature";
-          
-          Serial.print("Requesting URL: ");
-          Serial.println(url);
-          
-          // This will send the request to the server
-          client.print(String("GET ") + url + " HTTP/1.1\r\n" +
-                       "Host: " + host + "\r\n" + 
-                       "Connection: close\r\n\r\n");
-          delay(10);
-          
-          // Read all the lines of the reply from server and print them to Serial
-          while(client.available()){
-            String line = client.readStringUntil('\r');
-            Serial.print(line);
-          }
-          
-          Serial.println();
-          Serial.println("closing connection");
+          //WiFi.mode(WIFI_AP_STA);
+          delay(3000);
+
+          //ขอเชื่อมต่อไปยัง webserver ทาง port 8080
+//          WiFi.mode(WIFI_STA);  //<-- ห้ามลืมเพื่อจะต่อเข้า 192.168.4.1 ที่อยู่สูงกว่า
+//          WiFiClient c;
+//          while(!c.connect("192.168.4.1",8080)){
+//            Serial.print(".");
+//            delay(1000);
+//          }
+//          Serial.println();
+//          Serial.print("\nconnected to the WEB-server\n");
+//        
+//          //ส่งคำร้องต้องการดู web site
+//          c.print(String("GET ") + "/" + " HTTP/1.1\r\n" + "Host: " + "192.168.4.1:8080" + "\r\n" + "Connection: close\r\n\r\n");
+//          delay(10);
+//        
+//          //รับค่าคืนตอบกลับมาแล้วแสดงทาง serial
+//          Serial.println();
+//          String jsondata="";
+//          while(c.available()){
+//            String line = c.readStringUntil('\n');
+//            if(line.substring(2,11) == "variables") { jsondata = line;}
+//          }
+//          if(jsondata !="") { Serial.println(jsondata); }
+//          Serial.println("\n------------------------------------------");  
+//          delay(1000);
+
 
           break;
       }

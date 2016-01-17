@@ -1,1 +1,1 @@
-nodeMain;NODE_PRIMARY;
+nodeSecond;NODE_SECONDARY;
